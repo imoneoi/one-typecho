@@ -1,0 +1,6 @@
+# Windows
+Thumbs.db
+Desktop.ini
+
+#Config files
+/usr/*

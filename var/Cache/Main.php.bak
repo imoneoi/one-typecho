@@ -1,0 +1,80 @@
+<?php
+
+if (!defined('__TYPECHO_ROOT_DIR__')) exit;
+
+class Cache_Main
+{
+    const SAFETY_HEAD = '<? exit; ?>';
+    
+    static $_cacheDir = '';
+    static $_sections = array();
+    static $_section_mod = array();
+    static $_section_expire = array();
+    
+    function init()
+    {
+        self::$_cacheDir = __TYPECHO_ROOT_DIR__ . '/usr/cache_' . substr(md5(Typecho_Db::get()->getPrefix()), 0, 16) . '/';
+        if(!@is_dir(self::$_cacheDir)) mkdir(self::$_cacheDir);
+    }
+    
+    function finalize()
+    {
+        foreach(self::$_section_mod as $mod)
+        {
+            @file_put_contents(self::$_cacheDir . $mod . ".data.php", self::SAFETY_HEAD . @json_encode(self::$_sections[$mod]));
+        }
+        self::$_section_mod = array();
+    }
+    
+    function get($section)
+    {
+        if(!isset(self::$_sections[$section]))
+        {
+            $file = self::$_cacheDir . $section . ".data.php";
+            if(@file_exists($file))
+            {
+                if(isset(self::$_section_expire[$section]) && (time() - @filemtime($file)) > self::$_section_expire[$section]) 
+                {
+                    self::$_sections[$section] = array();
+                    @unlink($file);
+                }
+                else
+                {
+                    self::$_sections[$section] = @json_decode(@substr(@file_get_contents($file), strlen(self::SAFETY_HEAD)), true);
+                    if(!is_array(self::$_sections[$section])) self::$_sections[$section] = array();
+                }
+            }
+            else
+            {
+                //new
+                self::$_sections[$section] = array();
+                if(!@in_array($section, self::$_section_mod)) array_push(self::$_section_mod, $section);
+            }
+        }
+        return self::$_sections[$section];
+    }
+    
+    function exist($section)
+    {
+        $file = self::$_cacheDir . $section . ".data.php";
+        if(@file_exists($file))
+        {
+            if(isset(self::$_section_expire[$section]) && (time() - @filemtime($file)) > self::$_section_expire[$section]) 
+            {
+                self::$_sections[$section] = array();
+                @unlink($file);
+            }
+            else return true;
+        }
+        return false;
+    }
+    
+    function set($section, $value = NULL)
+    {
+        if(!@in_array($section, self::$_section_mod)) array_push(self::$_section_mod, $section);
+        
+        if($value != NULL) self::$_sections[$section] = $value;
+    }
+}
+
+Cache_Main::init();
